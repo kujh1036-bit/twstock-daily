@@ -73,3 +73,13 @@ python aggregate.py --start-year 2021 --end-year 2026
 - 多年回補須分批執行；完成後應依 `backfill_state.json` 與檔案日期做完整性檢查，再計算 MACD(201/202)、ADX(300) 與月線指標。
 - GitHub Actions 定時執行不需要 Render；未來可讓 Render 讀取資料庫或 GitHub CSV。
 - 若 GitHub 禁用排程、權限不足或執行額度限制，工作流程不會自動成功。需檢查 Actions 日誌。
+
+## 查詢指定日期漲停股
+
+資料庫建立完成後，可把「2026 年 10 月 8 日漲停板有哪些公司？」對應到以下可重複執行的查詢：
+
+```powershell
+python scripts/query_limit_up.py --date 2026-10-08
+```
+
+查詢依當日參考價、10% 漲跌幅限制及台股價格升降單位計算精確漲停價，並要求收盤價等於最高價及漲停價；不使用容易誤判或漏股的近似漲幅門檻。
