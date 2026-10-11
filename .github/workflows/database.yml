@@ -1,0 +1,53 @@
+name: Update official Taiwan stock database
+
+on:
+  workflow_dispatch:
+    inputs:
+      allow_latest:
+        description: '非交易日也寫入官方目前最新交易日'
+        required: false
+        default: false
+        type: boolean
+  schedule:
+    - cron: '40 10 * * 1-5'
+
+concurrency:
+  group: stock-data-writer
+  cancel-in-progress: false
+
+jobs:
+  update-database:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Require persistent database connection
+        shell: bash
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::error::Repository secret DATABASE_URL is not configured"
+            exit 1
+          fi
+      - name: Download, validate and store official daily prices
+        shell: bash
+        run: |
+          EXTRA=""
+          if [ "${{ inputs.allow_latest }}" = "true" ]; then EXTRA="--allow-latest"; fi
+          python scripts/update_daily.py --database-url "$DATABASE_URL" --require-external $EXTRA
+      - name: Upload source snapshots and audit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: official-stock-source-${{ github.run_id }}
+          path: |
+            data/raw/
+            data/database_last_run.json
+          if-no-files-found: ignore
+          retention-days: 14

@@ -1,2 +1,6 @@
 __pycache__/
 *.pyc
+data/*.sqlite3
+data/*.db
+data/raw/
+data/database_last_run.json

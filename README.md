@@ -2,6 +2,38 @@
 
 使用 GitHub Actions，週一至週五 **台灣時間 18:30** 自動執行（GitHub 排程可能延遲，非精確保證）。手動執行可指定交易日期。另提供可續跑的多年歷史回補，以及週線、月線 OHLCV 彙整。
 
+## 官方每日成交資料庫
+
+資料庫更新使用兩個官方、免 API Key 的 OpenAPI：
+
+- 上市：`https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL`
+- 上櫃：`https://www.tpex.org.tw/openapi/v1/tpex_mainboard_daily_close_quotes`
+
+股票名單另外取自 TWSE `t187ap03_L` 與 TPEx `mopsfin_t187ap03_O` 公司基本資料，因此會排除不在公司主檔中的 ETF、ETN、權證等商品。每日資料會驗證交易日、兩市場日期、最低合理筆數與高低價，再以 `(trade_date, market, stock_id)` 為主鍵寫入；重跑同一天會整批取代該市場當日資料，不會重複累加。
+
+建立本機 SQLite 並抓取官方目前最新交易日：
+
+```bash
+pip install -r requirements.txt
+python scripts/update_daily.py --allow-latest
+```
+
+本機資料庫預設為 `data/twstock.sqlite3`。正式自動更新建議使用 PostgreSQL，在 GitHub Repository → Settings → Secrets and variables → Actions 建立 `DATABASE_URL`：
+
+```text
+postgresql+psycopg://使用者:密碼@主機:5432/資料庫?sslmode=require
+```
+
+設定後，`Update official Taiwan stock database` 會在週一至週五台灣時間 18:40 自動執行。若未設定 `DATABASE_URL`，工作流程會明確失敗，避免誤以為短暫的 GitHub Runner SQLite 已永久保存。
+
+資料表：
+
+- `instruments`：上市、上櫃普通公司股票主檔
+- `daily_prices`：每日 OHLC、漲跌、成交股數、成交金額、成交筆數
+- `ingestion_runs`：每次更新的成功、略過或失敗紀錄
+- `trading_calendar`：預留官方交易日曆
+- `corporate_actions`：預留除權、除息、減資等調整資料
+
 ## 上傳與啟用
 
 1. 解壓 ZIP，將**資料夾內全部內容（包含 `.github` 隱藏資料夾）**上傳到 GitHub Repository 根目錄。建議用電腦操作，手機 GitHub 網頁操作較不方便。
