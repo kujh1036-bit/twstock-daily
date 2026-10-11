@@ -3,6 +3,7 @@
 import argparse
 import csv
 import datetime as dt
+import gzip
 import json
 import os
 import pathlib
@@ -60,14 +61,20 @@ def get_json(url, params):
         try:
             r=SESSION.get(url,params=params,timeout=40)
             r.raise_for_status()
-            return r.json()
+            # Both exchanges have historically returned inconsistent charset
+            # headers. Decode the bytes explicitly so Chinese names survive.
+            for encoding in ('utf-8-sig', 'cp950', 'big5'):
+                try:
+                    return json.loads(r.content.decode(encoding))
+                except (UnicodeDecodeError, json.JSONDecodeError):
+                    continue
+            raise ValueError('response is not valid UTF-8/CP950 JSON')
         except (requests.RequestException,ValueError):
             if attempt==2: raise
             time.sleep(3*(attempt+1))
 
 def twse(day):
     data=get_json('https://www.twse.com.tw/exchangeReport/MI_INDEX', {'response':'json','date':day.strftime('%Y%m%d'),'type':'ALLBUT0999'})
-    print("TWSE DEBUG:", "keys=", list(data.keys()), "stat=", data.get("stat"), "tables=", [(t.get("title"), len(t.get("data", []))) for t in data.get("tables", [])])
     if data.get('stat')!='OK':
         raise RuntimeError('TWSE unavailable: '+str(data.get('stat')))
     fields=data.get('fields9') or []
@@ -136,11 +143,21 @@ def tpex(day):
 
 def write_csv(path,rows):
     path.parent.mkdir(parents=True,exist_ok=True)
-    tmp=path.with_suffix('.tmp')
-    with tmp.open('w',encoding='utf-8-sig',newline='') as f:
+    tmp=path.with_name(path.name+'.tmp')
+    opener = gzip.open if path.suffix == '.gz' else open
+    with opener(tmp,'wt',encoding='utf-8-sig',newline='') as f:
         writer=csv.DictWriter(f,fieldnames=FIELDS)
         writer.writeheader();writer.writerows(rows)
     tmp.replace(path)
+
+def download_market(day, market):
+    """Download one market. Kept small so backfill.py can resume per market."""
+    funcs = {'TWSE': twse, 'TPEX': tpex}
+    try:
+        func = funcs[market.upper()]
+    except KeyError as exc:
+        raise ValueError(f'unsupported market: {market}') from exc
+    return func(day)
 
 def main():
     p=argparse.ArgumentParser()

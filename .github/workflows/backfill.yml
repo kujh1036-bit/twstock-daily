@@ -1,0 +1,58 @@
+name: Backfill Taiwan stock history
+
+on:
+  workflow_dispatch:
+    inputs:
+      start:
+        description: '開始日期 YYYY-MM-DD'
+        required: true
+        default: '2021-01-01'
+        type: string
+      end:
+        description: '結束日期 YYYY-MM-DD'
+        required: true
+        type: string
+      max_days:
+        description: '本次最多處理的缺漏平日數；建議 20'
+        required: true
+        default: '20'
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: stock-data-writer
+  cancel-in-progress: false
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -r requirements.txt
+      - name: Download missing daily history
+        run: >-
+          python backfill.py
+          --start "${{ inputs.start }}"
+          --end "${{ inputs.end }}"
+          --max-days "${{ inputs.max_days }}"
+      - name: Build weekly and monthly bars
+        if: always()
+        run: python aggregate.py --start-year 2021
+      - name: Commit downloaded data
+        if: always()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/
+          if ! git diff --cached --quiet; then
+            git commit -m "Backfill Taiwan stock history"
+            git push
+          fi
