@@ -105,7 +105,7 @@ def main():
     day=dt.date.fromisoformat(args.date) if args.date else dt.datetime.now(ZoneInfo('Asia/Taipei')).date()
     if day>dt.datetime.now(ZoneInfo('Asia/Taipei')).date(): p.error('future date')
     if day.weekday()>=5:
-        print(f'{day} weekend: no download');return 0
+        day -= dt.timedelta(days=day.weekday()-4)
     results={};errors={}
     for name,func in [('TWSE',twse),('TPEX',tpex)]:
         try:
