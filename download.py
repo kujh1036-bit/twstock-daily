@@ -42,7 +42,7 @@ def twse(day):
     if data.get('stat')!='OK':
         raise RuntimeError('TWSE unavailable: '+str(data.get('stat')))
     fields=data.get('fields9') or []
-    rows=data.get('data9') or []
+    rows=data.get('data9') or data.get('data') or []
     if not rows: raise RuntimeError('TWSE data9 missing/empty; schema or publication delay')
     # Official MI_INDEX data9 typically: code, name, volume, transactions, value, open, high, low, close, change, last bid, last ask, PE.
     keys=['證券代號','證券名稱','成交股數','成交筆數','成交金額','開盤價','最高價','最低價','收盤價']
