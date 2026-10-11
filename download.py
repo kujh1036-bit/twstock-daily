@@ -14,8 +14,14 @@ from zoneinfo import ZoneInfo
 
 import requests
 
+try:
+    import truststore
+    truststore.inject_into_ssl()
+except ImportError:
+    pass
+
 ROOT = pathlib.Path(__file__).resolve().parent
-FIELDS = ['date','market','stock_id','name','open','high','low','close','volume','change','change_pct','change_status']
+FIELDS = ['date','market','stock_id','name','open','high','low','close','volume','turnover','transactions','change','change_pct','change_status']
 SESSION = requests.Session()
 SESSION.headers.update({'User-Agent':'Mozilla/5.0 (compatible; TWStockDailyResearch/1.0)', 'Accept':'application/json,text/plain,*/*'})
 
@@ -102,7 +108,7 @@ def twse(day):
         close=num(row[idx['收盤價']])
         if not close: continue
         change, change_pct, status = change_info(close, row[change_col], row[sign_col] if sign_col is not None else '') if change_col is not None else ('', '', 'missing_column')
-        result.append(dict(date=day.isoformat(),market='TWSE',stock_id=code,name=clean(row[idx['證券名稱']]),open=num(row[idx['開盤價']]),high=num(row[idx['最高價']]),low=num(row[idx['最低價']]),close=close,volume=num(row[idx['成交股數']]),change=change,change_pct=change_pct,change_status=status))
+        result.append(dict(date=day.isoformat(),market='TWSE',stock_id=code,name=clean(row[idx['證券名稱']]),open=num(row[idx['開盤價']]),high=num(row[idx['最高價']]),low=num(row[idx['最低價']]),close=close,volume=num(row[idx['成交股數']]),turnover=num(row[idx['成交金額']]),transactions=num(row[idx['成交筆數']]),change=change,change_pct=change_pct,change_status=status))
     if len(result)<100: raise RuntimeError(f'TWSE suspiciously few stocks: {len(result)}')
     return result
 
@@ -128,6 +134,8 @@ def tpex(day):
         i_high=col('最高','最高價')
         i_low=col('最低','最低價')
         i_vol=col('成交股數','成交量')
+        i_value=col('成交金額','成交金額(元)','成交值')
+        i_transactions=col('成交筆數','成交筆數(筆)')
         i_change=col('漲跌','漲跌價差','漲跌金額','漲跌元')
         i_sign=col('漲跌(+/-)','漲跌符號')
         if any(x is None for x in (i_code,i_name,i_close,i_open,i_high,i_low,i_vol)): continue
@@ -137,7 +145,7 @@ def tpex(day):
             close=num(row[i_close])
             if not close: continue
             change, change_pct, status = change_info(close, row[i_change], row[i_sign] if i_sign is not None else '') if i_change is not None else ('', '', 'missing_column')
-            result.append(dict(date=day.isoformat(),market='TPEX',stock_id=code,name=clean(row[i_name]),open=num(row[i_open]),high=num(row[i_high]),low=num(row[i_low]),close=close,volume=num(row[i_vol]),change=change,change_pct=change_pct,change_status=status))
+            result.append(dict(date=day.isoformat(),market='TPEX',stock_id=code,name=clean(row[i_name]),open=num(row[i_open]),high=num(row[i_high]),low=num(row[i_low]),close=close,volume=num(row[i_vol]),turnover=num(row[i_value]) if i_value is not None else '',transactions=num(row[i_transactions]) if i_transactions is not None else '',change=change,change_pct=change_pct,change_status=status))
     if len(result)<100: raise RuntimeError(f'TPEx no valid stock table / suspiciously few stocks: {len(result)}')
     return result
 
