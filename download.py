@@ -39,6 +39,7 @@ def get_json(url, params):
 
 def twse(day):
     data=get_json('https://www.twse.com.tw/exchangeReport/MI_INDEX', {'response':'json','date':day.strftime('%Y%m%d'),'type':'ALLBUT0999'})
+       print("TWSE DEBUG:", "keys=", list(data.keys()), "stat=", data.get("stat"), "tables=", [(t.get("title"), len(t.get("data", []))) for t in data.get("tables", [])])
     if data.get('stat')!='OK':
         raise RuntimeError('TWSE unavailable: '+str(data.get('stat')))
     fields=data.get('fields9') or []
