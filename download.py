@@ -14,7 +14,7 @@ from zoneinfo import ZoneInfo
 import requests
 
 ROOT = pathlib.Path(__file__).resolve().parent
-FIELDS = ['date','market','stock_id','name','open','high','low','close','volume']
+FIELDS = ['date','market','stock_id','name','open','high','low','close','volume','change','change_pct','change_status']
 SESSION = requests.Session()
 SESSION.headers.update({'User-Agent':'Mozilla/5.0 (compatible; TWStockDailyResearch/1.0)', 'Accept':'application/json,text/plain,*/*'})
 
@@ -26,6 +26,34 @@ def num(v):
     if not s or s in ('-','X','除權息'): return ''
     try: return str(float(s)) if '.' in s else str(int(s))
     except ValueError: return ''
+
+def change_info(close, raw, sign=''):
+    """Compute day-over-day percentage from official price change, not open price."""
+    raw_text = clean(raw).replace('−', '-').replace('－', '-').replace('—', '')
+    sign_text = clean(sign)
+    if not raw_text or raw_text in ('--', '---', '-', '除權息', 'X'):
+        return '', '', 'missing'
+    # TWSE may separate direction as an HTML icon in a preceding column.
+    direction = -1 if ('-' in sign_text or '跌' in sign_text or 'green' in sign_text.lower()) else 1
+    if '+' in sign_text or '漲' in sign_text or 'red' in sign_text.lower():
+        direction = 1
+    raw_num = num(raw_text.lstrip('△▲▽▼'))
+    if raw_num == '':
+        return '', '', 'missing'
+    delta = float(raw_num)
+    if raw_text.startswith(('+', '-')):
+        direction = -1 if raw_text.startswith('-') else 1
+    elif raw_text.startswith(('△', '▲')):
+        direction = 1
+    elif raw_text.startswith(('▽', '▼')):
+        direction = -1
+    elif raw_text.strip() in ('0', '0.0', '0.00'):
+        direction = 0
+    delta = abs(delta) * direction
+    previous = float(close) - delta
+    if previous <= 0:
+        return '', '', 'invalid_previous_close'
+    return f'{delta:g}', f'{delta / previous * 100:.4f}', 'ok'
 
 def get_json(url, params):
     for attempt in range(3):
@@ -56,13 +84,18 @@ def twse(day):
     keys=['證券代號','證券名稱','成交股數','成交筆數','成交金額','開盤價','最高價','最低價','收盤價']
     if not all(k in fields for k in keys): raise RuntimeError('TWSE unexpected fields9: '+repr(fields))
     idx={k:fields.index(k) for k in keys}
+    change_col = next((fields.index(k) for k in ('漲跌價差','漲跌') if k in fields), None)
+    sign_col = next((fields.index(k) for k in ('漲跌(+/-)','漲跌(+/-) ', '漲跌符號') if k in fields), None)
+    if change_col is None:
+        print('WARNING TWSE: official change column not found; percentages left blank')
     result=[]
     for row in rows:
         code=clean(row[idx['證券代號']])
         if not re.fullmatch(r'\d{4,6}',code): continue
         close=num(row[idx['收盤價']])
         if not close: continue
-        result.append(dict(date=day.isoformat(),market='TWSE',stock_id=code,name=clean(row[idx['證券名稱']]),open=num(row[idx['開盤價']]),high=num(row[idx['最高價']]),low=num(row[idx['最低價']]),close=close,volume=num(row[idx['成交股數']])))
+        change, change_pct, status = change_info(close, row[change_col], row[sign_col] if sign_col is not None else '') if change_col is not None else ('', '', 'missing_column')
+        result.append(dict(date=day.isoformat(),market='TWSE',stock_id=code,name=clean(row[idx['證券名稱']]),open=num(row[idx['開盤價']]),high=num(row[idx['最高價']]),low=num(row[idx['最低價']]),close=close,volume=num(row[idx['成交股數']]),change=change,change_pct=change_pct,change_status=status))
     if len(result)<100: raise RuntimeError(f'TWSE suspiciously few stocks: {len(result)}')
     return result
 
@@ -88,13 +121,16 @@ def tpex(day):
         i_high=col('最高','最高價')
         i_low=col('最低','最低價')
         i_vol=col('成交股數','成交量')
+        i_change=col('漲跌','漲跌價差','漲跌金額','漲跌元')
+        i_sign=col('漲跌(+/-)','漲跌符號')
         if any(x is None for x in (i_code,i_name,i_close,i_open,i_high,i_low,i_vol)): continue
         for row in rows:
             code=clean(row[i_code])
             if not re.fullmatch(r'\d{4,6}',code): continue
             close=num(row[i_close])
             if not close: continue
-            result.append(dict(date=day.isoformat(),market='TPEX',stock_id=code,name=clean(row[i_name]),open=num(row[i_open]),high=num(row[i_high]),low=num(row[i_low]),close=close,volume=num(row[i_vol])))
+            change, change_pct, status = change_info(close, row[i_change], row[i_sign] if i_sign is not None else '') if i_change is not None else ('', '', 'missing_column')
+            result.append(dict(date=day.isoformat(),market='TPEX',stock_id=code,name=clean(row[i_name]),open=num(row[i_open]),high=num(row[i_high]),low=num(row[i_low]),close=close,volume=num(row[i_vol]),change=change,change_pct=change_pct,change_status=status))
     if len(result)<100: raise RuntimeError(f'TPEx no valid stock table / suspiciously few stocks: {len(result)}')
     return result
 
