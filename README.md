@@ -84,13 +84,13 @@ python scripts/query_limit_up.py --date 2026-10-08
 
 查詢依當日參考價、10% 漲跌幅限制及台股價格升降單位計算精確漲停價，並要求收盤價等於最高價及漲停價；不使用容易誤判或漏股的近似漲幅門檻。
 
-## 三年歷史資料庫回補
+## 五年歷史資料庫回補
 
 全市場歷史資料按交易日下載，不逐檔呼叫個股歷史頁。TWSE 使用 `MI_INDEX`，TPEx 使用 `dailyQuotes`；每個市場、日期寫入前會以官方公司主檔排除 ETF、ETN、權證等商品。回補會檢查資料庫中已完成的市場，支援中斷後續跑。
 
 ```powershell
 python scripts/backfill_database.py `
-  --start 2023-10-11 `
+  --start 2021-10-11 `
   --end 2026-10-10 `
   --max-days 0
 ```

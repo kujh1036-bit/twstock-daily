@@ -27,7 +27,7 @@ MARKETS = ('TWSE', 'TPEX')
 def parse_args():
     today = dt.datetime.now(ZoneInfo('Asia/Taipei')).date()
     default_end = today - dt.timedelta(days=1)
-    default_start = default_end - dt.timedelta(days=365 * 3)
+    default_start = default_end - dt.timedelta(days=365 * 5)
     parser = argparse.ArgumentParser(description='Backfill all-market history into daily_prices')
     parser.add_argument('--start', default=default_start.isoformat(), help='YYYY-MM-DD')
     parser.add_argument('--end', default=default_end.isoformat(), help='YYYY-MM-DD')
